@@ -4,40 +4,39 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 const chunkSizeKB = 500
+const chunkSizeBytes = 500 * 1024
 
 var rootDir, _ = os.Getwd()
 
 func main() {
-	rootDir, _ := os.Getwd()
-	path := filepath.Join(rootDir, "image.jpg")
-	data, _ := os.ReadFile(path)
-
-	os.Mkdir("image_jpg", 0755)
-
-	var chunk = make([]byte, 0, chunkSizeKB*1024)
-	var chunkIndex = 0
-	for _, b := range data {
-		chunk = append(chunk, b)
-		if len(chunk) >= chunkSizeKB*1024 {
-			chunkPath := filepath.Join(rootDir, "image_jpg", fmt.Sprintf("chunk_%d", chunkIndex))
-			os.WriteFile(chunkPath, chunk, 0644)
-			chunkIndex++
-			chunk = make([]byte, 0, chunkSizeKB*1024)
-		}
-	}
-
-	if len(chunk) > 0 {
-		chunkPath := filepath.Join(rootDir, "image_jpg", fmt.Sprintf("chunk_%d", chunkIndex))
-		os.WriteFile(chunkPath, chunk, 0644)
-	}
-
-	restoreFile(filepath.Join(rootDir, "image_jpg"))
+	filePath := os.Args[1]
+	fileDirPath := breakFileIntoChunks(filePath)
+	restoreFile(fileDirPath, filepath.Base(filePath))
 }
 
-func restoreFile(fileDir string) {
+func breakFileIntoChunks(filePath string) (fileDirPath string) {
+	fileName := filepath.Base(filePath)
+	data, _ := os.ReadFile(filePath)
+
+	fileDirPath = strings.Join(strings.Split(fileName, "."), "_")
+	os.Mkdir(fileDirPath, 0755)
+
+	var chunkIndex = 0
+	for i := 0; i < len(data); i += chunkSizeBytes {
+		end := min(i+chunkSizeBytes, len(data))
+		chunk := data[i:end]
+		chunkPath := filepath.Join(rootDir, fileDirPath, fmt.Sprintf("chunk_%d", chunkIndex))
+		os.WriteFile(chunkPath, chunk, 0644)
+		chunkIndex++
+	}
+	return fileDirPath
+}
+
+func restoreFile(fileDir, fileName string) {
 	var fileData []byte
 	entities, _ := os.ReadDir(fileDir)
 
@@ -47,6 +46,6 @@ func restoreFile(fileDir string) {
 		fileData = append(fileData, chunkData...)
 	}
 
-	resultFilePath := filepath.Join(rootDir, "restored_image.jpg")
+	resultFilePath := filepath.Join(rootDir, fileName)
 	os.WriteFile(resultFilePath, fileData, 0644)
 }
