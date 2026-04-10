@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
+
+	"github.com/google/uuid"
 )
 
 const chunkSizeKB = 500
@@ -14,16 +15,17 @@ var rootDir, _ = os.Getwd()
 
 func main() {
 	filePath := os.Args[1]
-	fileDirPath := breakFileIntoChunks(filePath)
+	fileDirPath, _ := breakFileIntoChunks(filePath)
 	restoreFile(fileDirPath, filepath.Base(filePath))
 }
 
-func breakFileIntoChunks(filePath string) (fileDirPath string) {
-	fileName := filepath.Base(filePath)
+func breakFileIntoChunks(filePath string) (string, error) {
 	data, _ := os.ReadFile(filePath)
 
-	fileDirPath = strings.Join(strings.Split(fileName, "."), "_")
-	os.Mkdir(fileDirPath, 0755)
+	fileDirPath := uuid.NewString()
+	if err := os.MkdirAll(fileDirPath, 0755); err != nil {
+		return "", fmt.Errorf("failed to create chunk directory: %w", err)
+	}
 
 	var chunkIndex = 0
 	for i := 0; i < len(data); i += chunkSizeBytes {
@@ -33,7 +35,7 @@ func breakFileIntoChunks(filePath string) (fileDirPath string) {
 		os.WriteFile(chunkPath, chunk, 0644)
 		chunkIndex++
 	}
-	return fileDirPath
+	return fileDirPath, nil
 }
 
 func restoreFile(fileDir, fileName string) {
@@ -49,3 +51,7 @@ func restoreFile(fileDir, fileName string) {
 	resultFilePath := filepath.Join(rootDir, fileName)
 	os.WriteFile(resultFilePath, fileData, 0644)
 }
+
+//TODO:
+// sqlite files database
+// running the server
