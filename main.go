@@ -1,6 +1,7 @@
 package main
 
 import (
+	"file-uploader/db"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,13 +15,19 @@ const chunkSizeBytes = 500 * 1024
 var rootDir, _ = os.Getwd()
 
 func main() {
+	_, err := db.InitDB()
+	if err != nil {
+		fmt.Printf("Error during creating a database: %s", err)
+		os.Exit(1)
+	}
+
 	filePath := os.Args[1]
 	fileDirPath, _ := breakFileIntoChunks(filePath)
 	restoreFile(fileDirPath, filepath.Base(filePath))
 }
 
 func breakFileIntoChunks(filePath string) (string, error) {
-	data, _ := os.ReadFile(filePath)
+	data, _ := os.ReadFile(filePath) // TODO: read file in streams
 
 	fileDirPath := uuid.NewString()
 	if err := os.MkdirAll(fileDirPath, 0755); err != nil {
@@ -55,3 +62,4 @@ func restoreFile(fileDir, fileName string) {
 //TODO:
 // sqlite files database
 // running the server
+// fixes: read the file in streams
