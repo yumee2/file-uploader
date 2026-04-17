@@ -15,11 +15,12 @@ const chunkSizeBytes = 500 * 1024
 var rootDir, _ = os.Getwd()
 
 func main() {
-	_, err := db.InitDB()
+	db, err := db.InitDB()
 	if err != nil {
 		fmt.Printf("Error during creating a database: %s", err)
 		os.Exit(1)
 	}
+	defer db.Close()
 
 	filePath := os.Args[1]
 	fileDirPath, _ := breakFileIntoChunks(filePath)
