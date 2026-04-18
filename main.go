@@ -2,7 +2,12 @@ package main
 
 import (
 	"file-uploader/db"
+	server "file-uploader/internal/http"
+	"file-uploader/models"
 	"fmt"
+	"log"
+	"mime"
+	"net/http"
 	"os"
 	"path/filepath"
 
@@ -15,24 +20,31 @@ const chunkSizeBytes = 500 * 1024
 var rootDir, _ = os.Getwd()
 
 func main() {
-	db, err := db.InitDB()
+	dbConn, err := db.InitDB()
 	if err != nil {
 		fmt.Printf("Error during creating a database: %s", err)
 		os.Exit(1)
 	}
-	defer db.Close()
+	defer dbConn.Close()
 
-	filePath := os.Args[1]
-	fileDirPath, _ := breakFileIntoChunks(filePath)
-	restoreFile(fileDirPath, filepath.Base(filePath))
+	//filePath := os.Args[1]
+
+	// file, _ := breakFileIntoChunks(filePath)
+	// fmt.Println(file.ID, file.OriginalName, file.Size, file.MimeType)
+	// db.AddFile(dbConn, file)
+	// restoreFile(fileDirPath, filepath.Base(filePath))
+	http.HandleFunc("GET /files", server.GetFilesHandler)
+	http.HandleFunc("GET /files/{id}", server.GetFileHandler)
+	log.Fatal(http.ListenAndServe(":8000", nil))
 }
 
-func breakFileIntoChunks(filePath string) (string, error) {
+func breakFileIntoChunks(filePath string) (*models.File, error) {
+	fileDirPath := uuid.NewString()
+
 	data, _ := os.ReadFile(filePath) // TODO: read file in streams
 
-	fileDirPath := uuid.NewString()
 	if err := os.MkdirAll(fileDirPath, 0755); err != nil {
-		return "", fmt.Errorf("failed to create chunk directory: %w", err)
+		return nil, fmt.Errorf("failed to create chunk directory: %w", err)
 	}
 
 	var chunkIndex = 0
@@ -43,7 +55,12 @@ func breakFileIntoChunks(filePath string) (string, error) {
 		os.WriteFile(chunkPath, chunk, 0644)
 		chunkIndex++
 	}
-	return fileDirPath, nil
+	return &models.File{
+		ID:           fileDirPath,
+		OriginalName: filepath.Base(filePath),
+		Size:         int64(len(data)),
+		MimeType:     mime.TypeByExtension(filepath.Ext(filePath)),
+	}, nil
 }
 
 func restoreFile(fileDir, fileName string) {
@@ -61,6 +78,5 @@ func restoreFile(fileDir, fileName string) {
 }
 
 //TODO:
-// sqlite files database
-// running the server
 // fixes: read the file in streams
+// encapsulate file logic in different package

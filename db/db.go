@@ -31,14 +31,12 @@ func InitDB() (*sql.DB, error) {
 }
 
 func AddFile(db *sql.DB, file *models.File) error {
-	result, err := db.Exec("INSERT INTO files (id, original_name, size, mime_type) VALUES (?, ?, ?, ?)",
+	_, err := db.Exec("INSERT INTO files (id, original_name, size, mime_type) VALUES (?, ?, ?, ?)",
 		file.ID, file.OriginalName, file.Size, file.MimeType)
 	if err != nil {
 		return fmt.Errorf("failed to insert file: %w", err)
 	}
 
-	fmt.Println("File was saved to databse with id: ")
-	fmt.Print(result.LastInsertId())
 	return nil
 }
 
