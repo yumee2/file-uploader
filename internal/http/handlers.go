@@ -12,3 +12,11 @@ func GetFilesHandler(w http.ResponseWriter, r *http.Request) {
 func GetFileHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, "GET ONE FILES")
 }
+
+func DeleteFileHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprint(w, "GET ONE FILES")
+}
+
+func CreateFileHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprint(w, "CREATE FILE")
+}

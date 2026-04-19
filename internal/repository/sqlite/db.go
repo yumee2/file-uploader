@@ -8,7 +8,11 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-func InitDB() (*sql.DB, error) {
+type Repository struct {
+	db *sql.DB
+}
+
+func NewDBConnection() (*Repository, error) {
 	db, err := sql.Open("sqlite", "files.db")
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
@@ -27,11 +31,11 @@ func InitDB() (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to create table: %w", err)
 	}
 
-	return db, nil
+	return &Repository{db: db}, nil
 }
 
-func AddFile(db *sql.DB, file *models.File) error {
-	_, err := db.Exec("INSERT INTO files (id, original_name, size, mime_type) VALUES (?, ?, ?, ?)",
+func (d *Repository) AddFile(file *models.File) error {
+	_, err := d.db.Exec("INSERT INTO files (id, original_name, size, mime_type) VALUES (?, ?, ?, ?)",
 		file.ID, file.OriginalName, file.Size, file.MimeType)
 	if err != nil {
 		return fmt.Errorf("failed to insert file: %w", err)
@@ -40,8 +44,8 @@ func AddFile(db *sql.DB, file *models.File) error {
 	return nil
 }
 
-func GetFile(db *sql.DB, id string) (*models.File, error) {
-	rows, err := db.Query("SELECT id, original_name, size, mime_type FROM files WHERE id = ?", id)
+func (d *Repository) GetFile(id string) (*models.File, error) {
+	rows, err := d.db.Query("SELECT id, original_name, size, mime_type FROM files WHERE id = ?", id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query file: %w", err)
 	}
@@ -59,8 +63,8 @@ func GetFile(db *sql.DB, id string) (*models.File, error) {
 	return &file, nil
 }
 
-func GetFiles(db *sql.DB) ([]*models.File, error) {
-	rows, err := db.Query("SELECT * FROM files")
+func (d *Repository) GetFiles() ([]*models.File, error) {
+	rows, err := d.db.Query("SELECT id, original_name, size, mime_type FROM files")
 	if err != nil {
 		return nil, fmt.Errorf("failed to query files: %w", err)
 	}
@@ -78,8 +82,8 @@ func GetFiles(db *sql.DB) ([]*models.File, error) {
 	return files, nil
 }
 
-func DeleteFile(db *sql.DB, id string) error {
-	result, err := db.Exec("update Products set price = $1 where id = $2", 69000, 1)
+func (d *Repository) DeleteFile(id string) error {
+	result, err := d.db.Exec("delete from files where id = $1", id)
 	if err != nil {
 		return fmt.Errorf("failed to delete file: %w", err)
 	}
@@ -90,4 +94,8 @@ func DeleteFile(db *sql.DB, id string) error {
 	}
 
 	return nil
+}
+
+func (d *Repository) Close() error {
+	return d.db.Close()
 }
