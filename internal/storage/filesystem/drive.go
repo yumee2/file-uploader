@@ -1,13 +1,10 @@
 package storage
 
 import (
-	"file-uploader/models"
 	"fmt"
-	"mime"
+	"io"
 	"os"
 	"path/filepath"
-
-	"github.com/google/uuid"
 )
 
 const chunkSizeKB = 500
@@ -15,41 +12,70 @@ const chunkSizeBytes = 500 * 1024
 
 var rootDir, _ = os.Getwd()
 
-func breakFileIntoChunks(filePath string) (*models.File, error) {
-	fileDirPath := uuid.NewString()
+func SaveFile(uuid string, data io.Reader) (int64, error) {
+	dirPath := filepath.Join(rootDir, "data", "chunks", uuid)
 
-	data, _ := os.ReadFile(filePath) // TODO: read file in streams
-
-	if err := os.MkdirAll(fileDirPath, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create chunk directory: %w", err)
+	if err := os.MkdirAll(dirPath, 0755); err != nil {
+		return 0, fmt.Errorf("failed to create chunk directory: %w", err)
 	}
 
+	buf := make([]byte, chunkSizeBytes)
+	var totalSize int64 = 0
 	var chunkIndex = 0
-	for i := 0; i < len(data); i += chunkSizeBytes {
-		end := min(i+chunkSizeBytes, len(data))
-		chunk := data[i:end]
-		chunkPath := filepath.Join(rootDir, fileDirPath, fmt.Sprintf("chunk_%d", chunkIndex))
-		os.WriteFile(chunkPath, chunk, 0644)
-		chunkIndex++
+
+	for {
+		n, err := data.Read(buf)
+		if n > 0 {
+			totalSize += int64(n)
+			chunkPath := filepath.Join(dirPath, fmt.Sprintf("chunk_%06d", chunkIndex))
+			err = os.WriteFile(chunkPath, buf[:n], 0644)
+			if err != nil {
+				return 0, fmt.Errorf("failed to write chunk: %w", err)
+			}
+			chunkIndex++
+		}
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return 0, fmt.Errorf("failed to read chunk: %w", err)
+		}
 	}
-	return &models.File{
-		ID:           fileDirPath,
-		OriginalName: filepath.Base(filePath),
-		Size:         int64(len(data)),
-		MimeType:     mime.TypeByExtension(filepath.Ext(filePath)),
-	}, nil
+
+	return totalSize, nil
 }
 
-func restoreFile(fileDir, fileName string) {
-	var fileData []byte
-	entities, _ := os.ReadDir(fileDir)
-
-	for _, entity := range entities {
-		filePath := filepath.Join(fileDir, entity.Name())
-		chunkData, _ := os.ReadFile(filePath)
-		fileData = append(fileData, chunkData...)
+func WriteFileTo(fileUUID string, w io.Writer) error {
+	dirPath := filepath.Join(rootDir, "data", "chunks", fileUUID)
+	entities, err := os.ReadDir(dirPath)
+	if err != nil {
+		return fmt.Errorf("failed to read chunk directory: %w", err)
 	}
 
-	resultFilePath := filepath.Join(rootDir, fileName)
-	os.WriteFile(resultFilePath, fileData, 0644)
+	buf := make([]byte, chunkSizeBytes)
+
+	for _, entity := range entities {
+		filePath := filepath.Join(dirPath, entity.Name())
+		file, err := os.Open(filePath)
+		if err != nil {
+			return fmt.Errorf("failed to open chunk %s: %w", entity.Name(), err)
+		}
+
+		_, copyErr := io.CopyBuffer(w, file, buf)
+		closeErr := file.Close()
+		if copyErr != nil {
+			return fmt.Errorf("failed to write chunk %s: %w", entity.Name(), copyErr)
+		}
+		if closeErr != nil {
+			return fmt.Errorf("failed to close chunk %s: %w", entity.Name(), closeErr)
+		}
+
+	}
+
+	return nil
+}
+
+func DeleteFile(fileUUID string) error {
+	dirPath := filepath.Join(rootDir, "data", "chunks", fileUUID)
+	return os.RemoveAll(dirPath)
 }

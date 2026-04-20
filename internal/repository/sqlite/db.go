@@ -1,4 +1,4 @@
-package db
+package sqlite
 
 import (
 	"database/sql"
@@ -13,7 +13,7 @@ type Repository struct {
 }
 
 func NewDBConnection() (*Repository, error) {
-	db, err := sql.Open("sqlite", "files.db")
+	db, err := sql.Open("sqlite", "data/files.db")
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
