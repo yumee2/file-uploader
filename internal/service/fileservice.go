@@ -2,6 +2,7 @@ package service
 
 import (
 	"file-uploader/internal/service/dto"
+	storage "file-uploader/internal/storage/filesystem"
 	"file-uploader/models"
 	"io"
 	"mime"
@@ -17,24 +18,17 @@ type DataBaseI interface {
 	DeleteFile(id string) error
 }
 
-type FileStorageI interface {
-	SaveFile(uuid string, data io.Reader) (int64, error)
-	WriteFileTo(fileUUID string, w io.Writer) error
-	DeleteFile(fileUUID string) error
-}
-
 type FileService struct {
-	db      DataBaseI
-	storage FileStorageI
+	db DataBaseI
 }
 
-func NewFileService(db DataBaseI, storage FileStorageI) *FileService {
-	return &FileService{db: db, storage: storage}
+func NewFileService(db DataBaseI) *FileService {
+	return &FileService{db: db}
 }
 
 func (fs *FileService) AddFile(fileDTO *dto.UploadDTO) (string, error) {
 	fileUUID := uuid.NewString()
-	size, err := fs.storage.SaveFile(fileUUID, fileDTO.Body)
+	size, err := storage.SaveFile(fileUUID, fileDTO.Body)
 	if err != nil {
 		return "", err
 	}
@@ -54,18 +48,16 @@ func (fs *FileService) AddFile(fileDTO *dto.UploadDTO) (string, error) {
 	return fileUUID, nil
 }
 
-func (fs *FileService) DownloadFile(id string, w io.Writer) (*models.File, error) {
+func (fs *FileService) DownloadFile(id string, w io.Writer) (*models.File, func(io.Writer) error, error) {
 	file, err := fs.db.GetFile(id)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	err = fs.storage.WriteFileTo(id, w)
-	if err != nil {
-		return nil, err
+	streamFunc := func(w io.Writer) error {
+		return storage.WriteFileTo(id, w)
 	}
-
-	return file, nil
+	return file, streamFunc, nil
 }
 
 func (fs *FileService) GetFiles() ([]*models.File, error) {
@@ -77,7 +69,7 @@ func (fs *FileService) GetFiles() ([]*models.File, error) {
 }
 
 func (fs *FileService) DeleteFile(id string) error {
-	err := fs.storage.DeleteFile(id)
+	err := storage.DeleteFile(id)
 	if err != nil {
 		return err
 	}

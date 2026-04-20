@@ -1,7 +1,11 @@
 package main
 
 import (
+	server "file-uploader/internal/http"
 	"file-uploader/internal/repository/sqlite"
+	"file-uploader/internal/service"
+	"log"
+	"net/http"
 
 	"fmt"
 	"os"
@@ -15,7 +19,20 @@ func main() {
 	}
 	defer dbConn.Close()
 
-	// http.HandleFunc("GET /files", server.GetFilesHandler)
-	// http.HandleFunc("GET /files/{id}", server.GetFileHandler)
-	// log.Fatal(http.ListenAndServe(":8000", nil))
+	fileService := service.NewFileService(dbConn)
+	fileHandler := server.NewFileHandler(fileService)
+
+	http.HandleFunc("GET /files", fileHandler.GetFiles)
+	http.HandleFunc("GET /files/{id}", fileHandler.DownloadFile)
+	http.HandleFunc("DELETE /files/{id}", fileHandler.DeleteFile)
+	http.HandleFunc("POST /files", fileHandler.AddFile)
+
+	log.Fatal(http.ListenAndServe(":8000", nil))
 }
+
+// TODO:
+// better error handling
+// graceful shutdown
+// rollback on failure
+// user authentication
+// do chunking on a client side so i can upload large files
