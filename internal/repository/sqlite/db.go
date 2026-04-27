@@ -73,7 +73,7 @@ func (d *Repository) GetFiles() ([]*models.File, error) {
 	var files []*models.File
 	for rows.Next() {
 		var file models.File
-		if err := rows.Scan(&file.ID, &file.OriginalName, &file.Size, &file.MimeType, nil); err != nil {
+		if err := rows.Scan(&file.ID, &file.OriginalName, &file.Size, &file.MimeType); err != nil {
 			return nil, fmt.Errorf("failed to scan file: %w", err)
 		}
 		files = append(files, &file)
