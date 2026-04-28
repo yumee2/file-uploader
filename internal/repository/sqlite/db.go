@@ -2,8 +2,10 @@ package sqlite
 
 import (
 	"database/sql"
+	"errors"
 	"file-uploader/models"
 	"fmt"
+	"strings"
 
 	_ "modernc.org/sqlite"
 )
@@ -38,6 +40,9 @@ func (d *Repository) AddFile(file *models.File) error {
 	_, err := d.db.Exec("INSERT INTO files (id, original_name, size, mime_type) VALUES (?, ?, ?, ?)",
 		file.ID, file.OriginalName, file.Size, file.MimeType)
 	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			return models.ErrFileAlreadyExists
+		}
 		return fmt.Errorf("failed to insert file: %w", err)
 	}
 
@@ -45,18 +50,12 @@ func (d *Repository) AddFile(file *models.File) error {
 }
 
 func (d *Repository) GetFile(id string) (*models.File, error) {
-	rows, err := d.db.Query("SELECT id, original_name, size, mime_type FROM files WHERE id = ?", id)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query file: %w", err)
-	}
-	defer rows.Close()
-
-	if !rows.Next() {
-		return nil, fmt.Errorf("file not found")
-	}
-
+	rows := d.db.QueryRow("SELECT id, original_name, size, mime_type FROM files WHERE id = ?", id)
 	var file models.File
 	if err := rows.Scan(&file.ID, &file.OriginalName, &file.Size, &file.MimeType); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, models.ErrFileNotFound
+		}
 		return nil, fmt.Errorf("failed to scan file: %w", err)
 	}
 
@@ -79,6 +78,10 @@ func (d *Repository) GetFiles() ([]*models.File, error) {
 		files = append(files, &file)
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
+
 	return files, nil
 }
 
@@ -90,7 +93,7 @@ func (d *Repository) DeleteFile(id string) error {
 
 	rowsAffected, _ := result.RowsAffected()
 	if rowsAffected == 0 {
-		return fmt.Errorf("file not found")
+		return models.ErrFileNotFound
 	}
 
 	return nil

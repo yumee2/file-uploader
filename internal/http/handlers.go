@@ -2,6 +2,7 @@ package http
 
 import (
 	"encoding/json"
+	"errors"
 	"file-uploader/internal/service/dto"
 	"file-uploader/models"
 	"fmt"
@@ -41,7 +42,11 @@ func (h *FileHandler) DownloadFile(w http.ResponseWriter, r *http.Request) {
 	fileUUID := r.PathValue("id")
 	file, streamFunc, err := h.service.DownloadFile(fileUUID, w)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		if errors.Is(err, models.ErrFileNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -58,6 +63,10 @@ func (h *FileHandler) DownloadFile(w http.ResponseWriter, r *http.Request) {
 func (h *FileHandler) DeleteFile(w http.ResponseWriter, r *http.Request) {
 	fileUUID := r.PathValue("id")
 	if err := h.service.DeleteFile(fileUUID); err != nil {
+		if errors.Is(err, models.ErrFileNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -97,6 +106,10 @@ func (h *FileHandler) AddFile(w http.ResponseWriter, r *http.Request) {
 		id, err := h.service.AddFile(fileDTO)
 		part.Close()
 		if err != nil {
+			if errors.Is(err, models.ErrFileAlreadyExists) {
+				http.Error(w, err.Error(), http.StatusConflict)
+				return
+			}
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}

@@ -36,6 +36,3 @@ func main() {
 // rollback on failure
 // user authentication
 // do chunking on a client side so i can upload large files
-
-// FIXES:
-// service layer: DELETE from database

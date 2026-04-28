@@ -1,10 +1,12 @@
 package service
 
 import (
+	"errors"
 	"file-uploader/internal/service/dto"
 	storage "file-uploader/internal/storage/filesystem"
 	"file-uploader/models"
 	"io"
+	"log"
 	"mime"
 	"path/filepath"
 
@@ -30,6 +32,7 @@ func (fs *FileService) AddFile(fileDTO *dto.UploadDTO) (string, error) {
 	fileUUID := uuid.NewString()
 	size, err := storage.SaveFile(fileUUID, fileDTO.Body)
 	if err != nil {
+		log.Print("failed to save file on a disk: ", err)
 		return "", err
 	}
 
@@ -42,6 +45,10 @@ func (fs *FileService) AddFile(fileDTO *dto.UploadDTO) (string, error) {
 
 	err = fs.db.AddFile(file)
 	if err != nil {
+		if errors.Is(err, models.ErrFileAlreadyExists) {
+			return fileUUID, models.ErrFileAlreadyExists
+		}
+		log.Print("failed to save file in the database: ", err)
 		return "", err
 	}
 
@@ -51,6 +58,10 @@ func (fs *FileService) AddFile(fileDTO *dto.UploadDTO) (string, error) {
 func (fs *FileService) DownloadFile(id string, w io.Writer) (*models.File, func(io.Writer) error, error) {
 	file, err := fs.db.GetFile(id)
 	if err != nil {
+		if errors.Is(err, models.ErrFileNotFound) {
+			return nil, nil, models.ErrFileNotFound
+		}
+		log.Print("failed to get the file from the database: ", err)
 		return nil, nil, err
 	}
 
@@ -63,6 +74,7 @@ func (fs *FileService) DownloadFile(id string, w io.Writer) (*models.File, func(
 func (fs *FileService) GetFiles() ([]*models.File, error) {
 	files, err := fs.db.GetFiles()
 	if err != nil {
+		log.Print("failed to get all files from the database: ", err)
 		return nil, err
 	}
 	return files, nil
@@ -71,6 +83,10 @@ func (fs *FileService) GetFiles() ([]*models.File, error) {
 func (fs *FileService) DeleteFile(id string) error {
 	err := storage.DeleteFile(id)
 	if err != nil {
+		if errors.Is(err, models.ErrFileNotFound) {
+			return models.ErrFileNotFound
+		}
+		log.Print("failed to delete the file from the database: ", err)
 		return err
 	}
 	return fs.db.DeleteFile(id)
