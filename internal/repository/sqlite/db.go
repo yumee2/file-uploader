@@ -1,6 +1,7 @@
 package sqlite
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"file-uploader/models"
@@ -36,8 +37,8 @@ func NewDBConnection() (*Repository, error) {
 	return &Repository{db: db}, nil
 }
 
-func (d *Repository) AddFile(file *models.File) error {
-	_, err := d.db.Exec("INSERT INTO files (id, original_name, size, mime_type) VALUES (?, ?, ?, ?)",
+func (d *Repository) AddFile(ctx context.Context, file *models.File) error {
+	_, err := d.db.ExecContext(ctx, "INSERT INTO files (id, original_name, size, mime_type) VALUES (?, ?, ?, ?)",
 		file.ID, file.OriginalName, file.Size, file.MimeType)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
@@ -49,8 +50,8 @@ func (d *Repository) AddFile(file *models.File) error {
 	return nil
 }
 
-func (d *Repository) GetFile(id string) (*models.File, error) {
-	rows := d.db.QueryRow("SELECT id, original_name, size, mime_type FROM files WHERE id = ?", id)
+func (d *Repository) GetFile(ctx context.Context, id string) (*models.File, error) {
+	rows := d.db.QueryRowContext(ctx, "SELECT id, original_name, size, mime_type FROM files WHERE id = ?", id)
 	var file models.File
 	if err := rows.Scan(&file.ID, &file.OriginalName, &file.Size, &file.MimeType); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -62,8 +63,8 @@ func (d *Repository) GetFile(id string) (*models.File, error) {
 	return &file, nil
 }
 
-func (d *Repository) GetFiles() ([]*models.File, error) {
-	rows, err := d.db.Query("SELECT id, original_name, size, mime_type FROM files")
+func (d *Repository) GetFiles(ctx context.Context) ([]*models.File, error) {
+	rows, err := d.db.QueryContext(ctx, "SELECT id, original_name, size, mime_type FROM files")
 	if err != nil {
 		return nil, fmt.Errorf("failed to query files: %w", err)
 	}
@@ -85,8 +86,8 @@ func (d *Repository) GetFiles() ([]*models.File, error) {
 	return files, nil
 }
 
-func (d *Repository) DeleteFile(id string) error {
-	result, err := d.db.Exec("delete from files where id = $1", id)
+func (d *Repository) DeleteFile(ctx context.Context, id string) error {
+	result, err := d.db.ExecContext(ctx, "delete from files where id = $1", id)
 	if err != nil {
 		return fmt.Errorf("failed to delete file: %w", err)
 	}

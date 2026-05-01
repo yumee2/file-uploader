@@ -68,12 +68,9 @@ func main() {
 }
 
 // TODO:
-// graceful shutdown
-// 	1. start the server in a goroutine
-//  2. get rid of log.Fatal
-//  3.create a context for the server
-//  4. clean up resources on shutdown
-// 	5. context propogation
 // rollback on failure
 // user authentication
 // do chunking on a client side so i can upload large files
+
+//FIXES:
+// creating files.db

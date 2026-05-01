@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -12,7 +13,7 @@ const chunkSizeBytes = 500 * 1024
 
 var rootDir, _ = os.Getwd()
 
-func SaveFile(uuid string, data io.Reader) (int64, error) {
+func SaveFile(ctx context.Context, uuid string, data io.Reader) (int64, error) {
 	dirPath := filepath.Join(rootDir, "data", "chunks", uuid)
 
 	if err := os.MkdirAll(dirPath, 0755); err != nil {
@@ -24,28 +25,32 @@ func SaveFile(uuid string, data io.Reader) (int64, error) {
 	var chunkIndex = 0
 
 	for {
-		n, err := data.Read(buf)
+		select {
+		case <-ctx.Done():
+			return 0, ctx.Err()
+		default:
+		}
+		n, err := io.ReadFull(data, buf)
 		if n > 0 {
 			totalSize += int64(n)
 			chunkPath := filepath.Join(dirPath, fmt.Sprintf("chunk_%06d", chunkIndex))
-			err = os.WriteFile(chunkPath, buf[:n], 0644)
-			if err != nil {
+			if err := os.WriteFile(chunkPath, buf[:n], 0644); err != nil {
 				return 0, fmt.Errorf("failed to write chunk: %w", err)
 			}
 			chunkIndex++
 		}
 		if err != nil {
-			if err == io.EOF {
+			if err == io.ErrUnexpectedEOF || err == io.EOF {
 				break
 			}
 			return 0, fmt.Errorf("failed to read chunk: %w", err)
 		}
 	}
-
 	return totalSize, nil
+
 }
 
-func WriteFileTo(fileUUID string, w io.Writer) error {
+func WriteFileTo(ctx context.Context, fileUUID string, w io.Writer) error {
 	dirPath := filepath.Join(rootDir, "data", "chunks", fileUUID)
 	entities, err := os.ReadDir(dirPath)
 	if err != nil {
@@ -53,14 +58,17 @@ func WriteFileTo(fileUUID string, w io.Writer) error {
 	}
 
 	buf := make([]byte, chunkSizeBytes)
-
 	for _, entity := range entities {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
 		filePath := filepath.Join(dirPath, entity.Name())
 		file, err := os.Open(filePath)
 		if err != nil {
 			return fmt.Errorf("failed to open chunk %s: %w", entity.Name(), err)
 		}
-
 		_, copyErr := io.CopyBuffer(w, file, buf)
 		closeErr := file.Close()
 		if copyErr != nil {
@@ -69,10 +77,9 @@ func WriteFileTo(fileUUID string, w io.Writer) error {
 		if closeErr != nil {
 			return fmt.Errorf("failed to close chunk %s: %w", entity.Name(), closeErr)
 		}
-
 	}
-
 	return nil
+
 }
 
 func DeleteFile(fileUUID string) error {

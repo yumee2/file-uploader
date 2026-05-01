@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"file-uploader/internal/service/dto"
@@ -12,10 +13,10 @@ import (
 )
 
 type FileServiceI interface {
-	AddFile(fileDTO *dto.UploadDTO) (string, error)
-	DownloadFile(id string, w io.Writer) (*models.File, func(io.Writer) error, error)
-	GetFiles() ([]*models.File, error)
-	DeleteFile(id string) error
+	AddFile(ctx context.Context, fileDTO *dto.UploadDTO) (string, error)
+	DownloadFile(ctx context.Context, id string, w io.Writer) (*models.File, func(io.Writer) error, error)
+	GetFiles(ctx context.Context) ([]*models.File, error)
+	DeleteFile(ctx context.Context, id string) error
 }
 
 type FileHandler struct {
@@ -27,7 +28,8 @@ func NewFileHandler(service FileServiceI) *FileHandler {
 }
 
 func (h *FileHandler) GetFiles(w http.ResponseWriter, r *http.Request) {
-	files, err := h.service.GetFiles()
+	ctx := r.Context()
+	files, err := h.service.GetFiles(ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -40,7 +42,8 @@ func (h *FileHandler) GetFiles(w http.ResponseWriter, r *http.Request) {
 
 func (h *FileHandler) DownloadFile(w http.ResponseWriter, r *http.Request) {
 	fileUUID := r.PathValue("id")
-	file, streamFunc, err := h.service.DownloadFile(fileUUID, w)
+	ctx := r.Context()
+	file, streamFunc, err := h.service.DownloadFile(ctx, fileUUID, w)
 	if err != nil {
 		if errors.Is(err, models.ErrFileNotFound) {
 			http.Error(w, err.Error(), http.StatusNotFound)
@@ -62,7 +65,8 @@ func (h *FileHandler) DownloadFile(w http.ResponseWriter, r *http.Request) {
 
 func (h *FileHandler) DeleteFile(w http.ResponseWriter, r *http.Request) {
 	fileUUID := r.PathValue("id")
-	if err := h.service.DeleteFile(fileUUID); err != nil {
+	ctx := r.Context()
+	if err := h.service.DeleteFile(ctx, fileUUID); err != nil {
 		if errors.Is(err, models.ErrFileNotFound) {
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return
@@ -81,7 +85,7 @@ func (h *FileHandler) AddFile(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "expected multipart/form-data", http.StatusBadRequest)
 		return
 	}
-
+	ctx := r.Context()
 	for {
 		part, err := mr.NextPart()
 		if err == io.EOF {
@@ -103,7 +107,7 @@ func (h *FileHandler) AddFile(w http.ResponseWriter, r *http.Request) {
 			Body: part,
 		}
 
-		id, err := h.service.AddFile(fileDTO)
+		id, err := h.service.AddFile(ctx, fileDTO)
 		part.Close()
 		if err != nil {
 			if errors.Is(err, models.ErrFileAlreadyExists) {

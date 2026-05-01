@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"file-uploader/internal/service/dto"
 	storage "file-uploader/internal/storage/filesystem"
@@ -14,10 +15,10 @@ import (
 )
 
 type DataBaseI interface {
-	AddFile(file *models.File) error
-	GetFile(id string) (*models.File, error)
-	GetFiles() ([]*models.File, error)
-	DeleteFile(id string) error
+	AddFile(ctx context.Context, file *models.File) error
+	GetFile(ctx context.Context, id string) (*models.File, error)
+	GetFiles(ctx context.Context) ([]*models.File, error)
+	DeleteFile(ctx context.Context, id string) error
 }
 
 type FileService struct {
@@ -28,9 +29,9 @@ func NewFileService(db DataBaseI) *FileService {
 	return &FileService{db: db}
 }
 
-func (fs *FileService) AddFile(fileDTO *dto.UploadDTO) (string, error) {
+func (fs *FileService) AddFile(ctx context.Context, fileDTO *dto.UploadDTO) (string, error) {
 	fileUUID := uuid.NewString()
-	size, err := storage.SaveFile(fileUUID, fileDTO.Body)
+	size, err := storage.SaveFile(ctx, fileUUID, fileDTO.Body)
 	if err != nil {
 		log.Print("failed to save file on a disk: ", err)
 		return "", err
@@ -43,7 +44,7 @@ func (fs *FileService) AddFile(fileDTO *dto.UploadDTO) (string, error) {
 		Size:         size,
 	}
 
-	err = fs.db.AddFile(file)
+	err = fs.db.AddFile(ctx, file)
 	if err != nil {
 		if errors.Is(err, models.ErrFileAlreadyExists) {
 			return fileUUID, models.ErrFileAlreadyExists
@@ -55,8 +56,8 @@ func (fs *FileService) AddFile(fileDTO *dto.UploadDTO) (string, error) {
 	return fileUUID, nil
 }
 
-func (fs *FileService) DownloadFile(id string, w io.Writer) (*models.File, func(io.Writer) error, error) {
-	file, err := fs.db.GetFile(id)
+func (fs *FileService) DownloadFile(ctx context.Context, id string, w io.Writer) (*models.File, func(io.Writer) error, error) {
+	file, err := fs.db.GetFile(ctx, id)
 	if err != nil {
 		if errors.Is(err, models.ErrFileNotFound) {
 			return nil, nil, models.ErrFileNotFound
@@ -66,13 +67,13 @@ func (fs *FileService) DownloadFile(id string, w io.Writer) (*models.File, func(
 	}
 
 	streamFunc := func(w io.Writer) error {
-		return storage.WriteFileTo(id, w)
+		return storage.WriteFileTo(ctx, id, w)
 	}
 	return file, streamFunc, nil
 }
 
-func (fs *FileService) GetFiles() ([]*models.File, error) {
-	files, err := fs.db.GetFiles()
+func (fs *FileService) GetFiles(ctx context.Context) ([]*models.File, error) {
+	files, err := fs.db.GetFiles(ctx)
 	if err != nil {
 		log.Print("failed to get all files from the database: ", err)
 		return nil, err
@@ -80,7 +81,7 @@ func (fs *FileService) GetFiles() ([]*models.File, error) {
 	return files, nil
 }
 
-func (fs *FileService) DeleteFile(id string) error {
+func (fs *FileService) DeleteFile(ctx context.Context, id string) error {
 	err := storage.DeleteFile(id)
 	if err != nil {
 		if errors.Is(err, models.ErrFileNotFound) {
@@ -89,5 +90,5 @@ func (fs *FileService) DeleteFile(id string) error {
 		log.Print("failed to delete the file from the database: ", err)
 		return err
 	}
-	return fs.db.DeleteFile(id)
+	return fs.db.DeleteFile(ctx, id)
 }
