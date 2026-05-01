@@ -1,11 +1,16 @@
 package main
 
 import (
+	"context"
+	"errors"
 	server "file-uploader/internal/http"
 	"file-uploader/internal/repository/sqlite"
 	"file-uploader/internal/service"
 	"log"
 	"net/http"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"fmt"
 	"os"
@@ -22,17 +27,53 @@ func main() {
 	fileService := service.NewFileService(dbConn)
 	fileHandler := server.NewFileHandler(fileService)
 
-	http.HandleFunc("GET /files", fileHandler.GetFiles)
-	http.HandleFunc("GET /files/{id}", fileHandler.DownloadFile)
-	http.HandleFunc("DELETE /files/{id}", fileHandler.DeleteFile)
-	http.HandleFunc("POST /files", fileHandler.AddFile)
+	mux := http.NewServeMux()
 
-	log.Fatal(http.ListenAndServe(":8000", nil))
+	mux.HandleFunc("GET /files", fileHandler.GetFiles)
+	mux.HandleFunc("GET /files/{id}", fileHandler.DownloadFile)
+	mux.HandleFunc("DELETE /files/{id}", fileHandler.DeleteFile)
+	mux.HandleFunc("POST /files", fileHandler.AddFile)
+
+	srv := &http.Server{
+		Addr:    ":8000",
+		Handler: mux,
+	}
+	serverErr := make(chan error, 1)
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGTERM, syscall.SIGINT)
+
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serverErr <- err
+		}
+	}()
+	log.Println("server started on :8000")
+
+	select {
+	case err := <-serverErr:
+		log.Printf("server stopped unexpectedly: %v", err)
+		return
+	case <-quit:
+		log.Println("server shutting down")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Printf("graceful shutdown failed: %v", err)
+		return
+	}
+	log.Println("http server stopped")
 }
 
 // TODO:
-// better error handling
 // graceful shutdown
+// 	1. start the server in a goroutine
+//  2. get rid of log.Fatal
+//  3.create a context for the server
+//  4. clean up resources on shutdown
+// 	5. context propogation
 // rollback on failure
 // user authentication
 // do chunking on a client side so i can upload large files
