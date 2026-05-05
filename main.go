@@ -69,6 +69,8 @@ func main() {
 
 // TODO:
 // rollback on failure
+// 	1. adding
+//	2. deleting
 // user authentication
 // do chunking on a client side so i can upload large files
 

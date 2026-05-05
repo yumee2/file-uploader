@@ -49,6 +49,7 @@ func (fs *FileService) AddFile(ctx context.Context, fileDTO *dto.UploadDTO) (str
 		if errors.Is(err, models.ErrFileAlreadyExists) {
 			return fileUUID, models.ErrFileAlreadyExists
 		}
+		storage.DeleteFile(file.ID)
 		log.Print("failed to save file in the database: ", err)
 		return "", err
 	}
