@@ -6,17 +6,22 @@ import (
 	server "file-uploader/internal/http"
 	"file-uploader/internal/repository/sqlite"
 	"file-uploader/internal/service"
+	"flag"
+	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	"fmt"
-	"os"
+	"golang.org/x/term"
 )
 
 func main() {
+	setupAuth := flag.Bool("setup-auth", false, "set up authentication password")
+	flag.Parse()
+
 	dbConn, err := sqlite.NewDBConnection()
 	if err != nil {
 		fmt.Printf("Error during creating a database: %s", err)
@@ -25,6 +30,21 @@ func main() {
 	defer dbConn.Close()
 
 	fileService := service.NewFileService(dbConn)
+	if *setupAuth {
+		password, err := readPassword()
+		if err != nil {
+			fmt.Printf("Error reading password: %s\n", err)
+			os.Exit(1)
+		}
+
+		if err := fileService.CreatePassword(password); err != nil {
+			fmt.Printf("Error creating password: %s\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Println("Password created")
+		return
+	}
 	fileHandler := server.NewFileHandler(fileService)
 
 	mux := http.NewServeMux()
@@ -67,11 +87,39 @@ func main() {
 	log.Println("http server stopped")
 }
 
+func readPassword() (string, error) {
+	fmt.Print("Enter password: ")
+	passwordBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
+	fmt.Println()
+	if err != nil {
+		return "", err
+	}
+
+	fmt.Print("Confirm password: ")
+	confirmBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
+	fmt.Println()
+	if err != nil {
+		return "", err
+	}
+
+	password := string(passwordBytes)
+	confirm := string(confirmBytes)
+
+	if password == "" {
+		return "", fmt.Errorf("password cannot be empty")
+	}
+	if password != confirm {
+		return "", fmt.Errorf("passwords do not match")
+	}
+
+	return password, nil
+}
+
 // TODO:
-// rollback on failure
-// 	1. adding
-//	2. deleting
 // user authentication
+// 	1. CLI cmd
+// 	2. check if password exists
+// 	3. protect routes
 // do chunking on a client side so i can upload large files
 
 //FIXES:

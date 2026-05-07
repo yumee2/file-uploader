@@ -28,10 +28,16 @@ func NewDBConnection() (*Repository, error) {
             size          INTEGER,
             mime_type     TEXT,
             created_at    DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
+        );
+        CREATE TABLE IF NOT EXISTS auth (
+        	id            INTEGER PRIMARY KEY CHECK (id = 1),
+         	password_hash TEXT NOT NULL,
+        	created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+        	updated_at    DATETIME DEFAULT CURRENT_TIMESTAMP
+         );
     `)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create table: %w", err)
+		return nil, fmt.Errorf("failed to initialize database: %w", err)
 	}
 
 	return &Repository{db: db}, nil
@@ -102,4 +108,13 @@ func (d *Repository) DeleteFile(ctx context.Context, id string) error {
 
 func (d *Repository) Close() error {
 	return d.db.Close()
+}
+
+func (d *Repository) CreatePassword(password string) error {
+	_, err := d.db.Exec("INSERT INTO auth (id, password_hash) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET password_hash = ?", password, password)
+	if err != nil {
+		return fmt.Errorf("failed to insert password: %w", err)
+	}
+
+	return nil
 }
